@@ -1,40 +1,33 @@
 import asyncio
-import contextlib
-import json
 import logging
-import os
-import time
-import sys
-
-from concurrent.futures import CancelledError
-from datetime import datetime, timedelta
-
-from async_generator import yield_, async_generator
-from freezegun import freeze_time
+from asyncio import AbstractEventLoop
+from datetime import datetime
 
 import pytest
+from freezegun import freeze_time
+from typing import Tuple
 
 __all__ = ['thawgun']
 
 
 class ThawGun:
-    def __init__(self, loop):
+    def __init__(self, loop: AbstractEventLoop):
         self.loop = loop
-        self.offset = 0
-        self.real_time = self.loop.time
-        self.loop.time = self.time
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.freeze_time = freeze_time(tick=True)
-        self.freeze_time.start()
-        self.wall_offset = None
+        self.loop._real_time = self.loop.time
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._do_tick = True
+        self._frozen_wall_clock_control = None
+        self._freeze_time = None
 
-    def time(self):
-        return self.real_time() + self.offset
+    async def _drain(self, drain_time: float) -> None:
+        """
+        Allow the loop to execute all the code at given point in time.
 
-    def _datetime(self, current_time):
-        return datetime.fromtimestamp(current_time) + self.wall_offset
+        Caveat: assumes that all the events scheduled for earlier
+        than drain_time have already been executed.
 
-    async def _drain(self, drain_time):
+        :param drain_time: all code scheduled at this timestamp will be executed
+        """
         while True:
             await asyncio.sleep(0)
 
@@ -47,53 +40,103 @@ class ThawGun:
         while self.loop._ready:
             await asyncio.sleep(0)
 
-    async def advance(self, offset):
+    def __enter__(self):
+        self._do_tick = False
+        self.set_wall_clock(to=datetime.now())
+        self._adjust_loop_clock(to=self.loop.time())
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._do_tick = True
+        self._adjust_loop_clock(to=self.loop.time())
+        self.set_wall_clock(to=datetime.now())
+
+    def _adjust_loop_clock(self, to: float) -> None:
+        """
+        Moves loop clock to a specific timestamp, making sure that external observers do not see the introduced
+        non-linearity.
+        :param to: target timestamp
+        """
+        if self._do_tick:
+            loop_real_time_drift = self.loop._real_time() - to
+            self.loop.time = lambda: self.loop._real_time() - loop_real_time_drift
+        else:
+            self.loop.time = lambda: to
+
+    def set_wall_clock(self, to: datetime) -> None:
+        """
+        Moves wall clock to a specific datetime, preserving current mode of operation.
+
+        :param to: target datetime
+        """
+        if self._freeze_time is not None:
+            self._freeze_time.stop()
+        self._freeze_time = freeze_time(to, tick=self._do_tick)
+        self._frozen_wall_clock_control = self._freeze_time.start()
+
+    async def advance(self, offset: float) -> Tuple[datetime, datetime]:
+        """
+        Advance both loop and wall clocks by offset, preserving mode of operation.
+
+        :param offset:
+        :return: datetimes at the beginning and end of advance() call
+        """
         assert offset >= 0, "Can't go backwards"
 
+        prev_ticking_state = self._do_tick
+        self._do_tick = False
+
+        advance_start_dt = advance_end_dt = datetime.now()
+        self.set_wall_clock(advance_start_dt)
+
+        self._adjust_loop_clock(self.loop.time())
+
+        loop_target_time = self.loop.time() + offset
+
         try:
-            base_time = current_time = self.time()
-            new_time = base_time + offset
-            self.wall_offset = timedelta(seconds=time.time() - self.time())
+            await self._drain(self.loop.time())
 
-            with freeze_time(self._datetime(current_time)) as ft:
-                self.loop.time = lambda: current_time
+            while self.loop._scheduled and self.loop._scheduled[0]._when <= loop_target_time:
+                handle = self.loop._scheduled[0]
+                prev_drain_time = self.loop.time()
+                this_drain_time = handle._when
 
-                self.logger.debug('Freeze: %s', datetime.now())
+                self._frozen_wall_clock_control.tick(this_drain_time - prev_drain_time)
 
-                await self._drain(base_time)
+                self._adjust_loop_clock(this_drain_time)
+                advance_end_dt = datetime.now()
 
-                while self.loop._scheduled:
-                    handle = self.loop._scheduled[0]
+                if not handle._cancelled:
+                    handle._run()
+                    handle._callback, handle._args = lambda: None, ()
 
-                    if handle._when > new_time:
-                        break
+                await self._drain(self.loop.time())
 
-                    current_time = handle._when
-                    ft.move_to(self._datetime(current_time))
+            self._frozen_wall_clock_control.tick(loop_target_time - self.loop.time())
 
-                    self.logger.debug('Advance: %s', self._datetime(current_time))
+            self._adjust_loop_clock(loop_target_time)
+            await self._drain(self.loop.time())
 
-                    if not handle._cancelled:
-                        handle._run()
-                        handle._callback, handle._args = lambda: None, ()
+            advance_end_dt = datetime.now()
 
-                    await self._drain(current_time)
-
-                await self._drain(new_time)
         finally:
-            self.offset += offset
-            self.loop.time = self.time
+            self._do_tick = prev_ticking_state
+            self._adjust_loop_clock(loop_target_time)
+            self.set_wall_clock(advance_end_dt)
 
-        start, end = (self._datetime(base_time), self._datetime(new_time))
+        return advance_start_dt, advance_end_dt
 
-        self.freeze_time = freeze_time(self._datetime(new_time), tick=True)
-        self.freeze_time.start()
-        self.logger.debug('Thaw: %s', datetime.now())
-
-        return start, end
+    def test_teardown(self) -> None:
+        """
+        Fix time displayed after the test, e.g. in pytest summary
+        """
+        self._freeze_time.stop()
+        self.loop.time = self.loop._real_time
+        del self.loop._real_time
 
 
 @pytest.fixture
-@async_generator
-async def thawgun(event_loop):
-    await yield_(ThawGun(event_loop))
+def thawgun(event_loop):
+    tg = ThawGun(loop=event_loop)
+    yield tg
+    tg.test_teardown()
