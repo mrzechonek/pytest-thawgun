@@ -1,8 +1,6 @@
 import asyncio
 import contextlib
-from datetime import datetime
 from concurrent.futures import CancelledError
-
 from datetime import datetime, timedelta
 
 import pytest
@@ -10,7 +8,7 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def counter(count, before = None, after = None):
+async def counter(count, before=None, after=None):
     for i in range(count):
         if before:
             before(i)
@@ -27,10 +25,12 @@ async def counter(count, before = None, after = None):
 
 async def test_sleep(event_loop, thawgun):
     befores = []
+
     def before(count):
         befores.append((count, datetime.now()))
 
     afters = []
+
     def after(count):
         afters.append((count, datetime.now()))
 

@@ -14,11 +14,11 @@ async def test_queue(event_loop, thawgun):
             await asyncio.sleep(delay)
             await writer.put(data)
 
-            if data == '!':
+            if data == "!":
                 break
 
     async def client(reader, writer, text, delay):
-        received = ''
+        received = ""
 
         for i in text:
             await reader.put(i)
@@ -29,7 +29,7 @@ async def test_queue(event_loop, thawgun):
     reader = asyncio.Queue()
     writer = asyncio.Queue()
 
-    text = 'Time travel!'
+    text = "Time travel!"
 
     server_task = event_loop.create_task(server(reader, writer, 1.0))
     client_task = event_loop.create_task(client(reader, writer, text, 1.0))
@@ -41,7 +41,6 @@ async def test_queue(event_loop, thawgun):
 
 
 async def test_io(event_loop, thawgun):
-
     async def server(reader, writer, delay):
         while True:
             data = await reader.read(1)
@@ -51,14 +50,13 @@ async def test_io(event_loop, thawgun):
             await asyncio.sleep(delay)
             writer.write(data)
 
-            if data == b'!':
+            if data == b"!":
                 break
 
         writer.close()
 
-
     async def client(reader, writer, text, delay):
-        received = b''
+        received = b""
 
         for i in text:
             writer.write(bytes([i]))
@@ -73,12 +71,13 @@ async def test_io(event_loop, thawgun):
 
         return received
 
-    text = b'Time travel!'
+    text = b"Time travel!"
 
-    server_task = await asyncio.start_server(functools.partial(server, delay=1.0),
-                                             'localhost', 1234)
+    server_task = await asyncio.start_server(
+        functools.partial(server, delay=1.0), "localhost", 1234
+    )
 
-    reader, writer = await asyncio.open_connection('localhost', 1234)
+    reader, writer = await asyncio.open_connection("localhost", 1234)
 
     client_task = event_loop.create_task(client(reader, writer, text, 1.0))
 
@@ -88,5 +87,3 @@ async def test_io(event_loop, thawgun):
 
     server_task.close()
     await server_task.wait_closed()
-
-

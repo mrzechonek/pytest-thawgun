@@ -1,5 +1,6 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
+# fmt: off
 setup(
     name='pytest-thawgun',
     version='0.0.1',
@@ -28,12 +29,12 @@ setup(
         'freezegun',
         'pytest-asyncio',
     ],
+    tests_require=[
+        'coveralls',
+        'pytest-cov',
+    ],
     entry_points={
         'pytest11': ['thawgun = pytest_thawgun.plugin']
     },
-    extras_require={
-        "testing": [
-            "coverage",
-        ],
-    },
 )
+# fmt: on

@@ -3,18 +3,16 @@ import contextlib
 import json
 import logging
 import os
-import time
 import sys
-
+import time
 from concurrent.futures import CancelledError
 from datetime import datetime, timedelta
 
-from async_generator import yield_, async_generator
+import pytest
+from async_generator import async_generator, yield_
 from freezegun import freeze_time
 
-import pytest
-
-__all__ = ['thawgun']
+__all__ = ["thawgun"]
 
 
 class ThawGun:
@@ -58,7 +56,7 @@ class ThawGun:
             with freeze_time(self._datetime(current_time)) as ft:
                 self.loop.time = lambda: current_time
 
-                self.logger.debug('Freeze: %s', datetime.now())
+                self.logger.debug("Freeze: %s", datetime.now())
 
                 await self._drain(base_time)
 
@@ -71,7 +69,7 @@ class ThawGun:
                     current_time = handle._when
                     ft.move_to(self._datetime(current_time))
 
-                    self.logger.debug('Advance: %s', self._datetime(current_time))
+                    self.logger.debug("Advance: %s", self._datetime(current_time))
 
                     if not handle._cancelled:
                         handle._run()
@@ -88,7 +86,7 @@ class ThawGun:
 
         self.freeze_time = freeze_time(self._datetime(new_time), tick=True)
         self.freeze_time.start()
-        self.logger.debug('Thaw: %s', datetime.now())
+        self.logger.debug("Thaw: %s", datetime.now())
 
         return start, end
 
