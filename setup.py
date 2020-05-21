@@ -20,7 +20,7 @@ setup(
         "Topic :: Software Development :: Testing",
         "Framework :: Pytest",
     ],
-    python_requires='>= 3.5',
+    python_requires='>= 3.6',
     setup_requires=[
         'pytest-runner',
     ],
