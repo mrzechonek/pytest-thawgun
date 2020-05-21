@@ -33,14 +33,7 @@ class ThawGun:
         return datetime.fromtimestamp(current_time) + self.wall_offset
 
     async def _drain(self, drain_time):
-        while True:
-            await asyncio.sleep(0)
-
-            if not self.loop._scheduled:
-                break
-
-            if self.loop._scheduled[0]._when > drain_time:
-                break
+        await asyncio.sleep(0)
 
         while self.loop._ready:
             await asyncio.sleep(0)
@@ -56,28 +49,31 @@ class ThawGun:
             with freeze_time(self._datetime(current_time)) as ft:
                 self.loop.time = lambda: current_time
 
-                self.logger.debug("Freeze: %s", datetime.now())
+                self.logger.debug("Freeze: %s", self._datetime(current_time))
 
-                await self._drain(base_time)
+                # keep iterating the loop until we reach target time, or there
+                # is nothing more to do
+                while current_time < new_time and (
+                    self.loop._ready or self.loop._scheduled
+                ):
+                    await self._drain(base_time)
 
-                while self.loop._scheduled:
-                    handle = self.loop._scheduled[0]
+                    while self.loop._scheduled:
+                        handle = self.loop._scheduled[0]
 
-                    if handle._when > new_time:
-                        break
+                        if handle._when > new_time:
+                            break
 
-                    current_time = handle._when
-                    ft.move_to(self._datetime(current_time))
+                        current_time = handle._when
+                        ft.move_to(self._datetime(current_time))
 
-                    self.logger.debug("Advance: %s", self._datetime(current_time))
+                        self.logger.debug("Advance: %s", self._datetime(current_time))
 
-                    if not handle._cancelled:
-                        handle._run()
-                        handle._callback, handle._args = lambda: None, ()
+                        if not handle._cancelled:
+                            handle._run()
+                            handle._callback, handle._args = lambda: None, ()
 
-                    await self._drain(current_time)
-
-                await self._drain(new_time)
+                        await self._drain(current_time)
         finally:
             self.offset += offset
             self.loop.time = self.time
@@ -85,8 +81,8 @@ class ThawGun:
         start, end = (self._datetime(base_time), self._datetime(new_time))
 
         self.freeze_time = freeze_time(self._datetime(new_time), tick=True)
+        self.logger.debug("Thaw: %s", self._datetime(new_time))
         self.freeze_time.start()
-        self.logger.debug("Thaw: %s", datetime.now())
 
         return start, end
 

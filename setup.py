@@ -32,6 +32,7 @@ setup(
     tests_require=[
         'coveralls',
         'pytest-cov',
+        'aiohttp',
     ],
     entry_points={
         'pytest11': ['thawgun = pytest_thawgun.plugin']
