@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 # fmt: off
 setup(
     name='pytest-thawgun',
-    version='0.0.1',
+    version='0.0.2',
     packages=find_packages(),
     url='https://github.com/mrzechonek/thawgun',
     license='Apache 2.0',
