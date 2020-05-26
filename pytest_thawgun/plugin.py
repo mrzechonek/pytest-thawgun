@@ -16,6 +16,7 @@ class ThawGun:
         self.loop = loop
         self.offset = 0
         self.real_time = self.loop.time
+        self.real_select = self.loop._selector.select
         self.loop.time = self.time
         self.logger = logging.getLogger(self.__class__.__name__)
         self.freeze_time = freeze_time(tick=True)
@@ -62,6 +63,9 @@ class ThawGun:
         try:
             with freeze_time(self._datetime(current_time)) as ft:
                 self.loop.time = lambda: current_time
+                self.loop._selector.select = lambda timeout: self.real_select(
+                    timeout or self.loop._clock_resolution
+                )
 
                 self.logger.debug("Freeze: %s", self._datetime(current_time))
 
@@ -88,9 +92,11 @@ class ThawGun:
                             handle._callback, handle._args = lambda: None, ()
 
                         await self._drain()
+
         finally:
             self.offset += offset
             self.loop.time = self.time
+            self.loop._selector.select = self.real_select
 
         start, end = (self._datetime(base_time), self._datetime(new_time))
 
