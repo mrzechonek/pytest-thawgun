@@ -33,14 +33,22 @@ class ThawGun:
         while self.loop._ready:
             await asyncio.sleep(0)
 
-    async def advance(self, offset):
+    async def advance(self, offset_or_new_time):
+        base_time = current_time = self.time()
+        self.wall_offset = timedelta(seconds=time.time() - self.time())
+
+        if isinstance(offset_or_new_time, datetime):
+            offset = (offset_or_new_time - self.wall_offset).timestamp() - base_time
+        elif isinstance(offset_or_new_time, timedelta):
+            offset = offset_or_new_time.total_seconds()
+        else:
+            offset = offset_or_new_time
+
         assert offset >= 0, "Can't go backwards"
 
-        try:
-            base_time = current_time = self.time()
-            new_time = base_time + offset
-            self.wall_offset = timedelta(seconds=time.time() - self.time())
+        new_time = base_time + offset
 
+        try:
             with freeze_time(self._datetime(current_time)) as ft:
                 self.loop.time = lambda: current_time
 
