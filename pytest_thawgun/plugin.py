@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from collections import deque
 from datetime import datetime, timedelta
 
 import pytest
@@ -28,10 +29,20 @@ class ThawGun:
         return datetime.fromtimestamp(current_time) + self.wall_offset
 
     async def _drain(self):
-        await asyncio.sleep(0)
+        while True:
+            ready = deque(self.loop._ready)
+            scheduled = list(self.loop._scheduled)
 
-        while self.loop._ready:
             await asyncio.sleep(0)
+
+            if self.loop._ready:
+                continue
+
+            if self.loop._scheduled != scheduled:
+                continue
+
+            if self.loop._ready == ready:
+                break
 
     async def advance(self, offset_or_new_time):
         base_time = current_time = self.time()
