@@ -3,11 +3,14 @@ import contextlib
 import functools
 import logging
 import multiprocessing
+import time
 from concurrent import futures
 from itertools import count
 
 import aiohttp.web
 import pytest
+import requests
+from aiohttp.client_exceptions import ClientConnectionError
 
 pytestmark = pytest.mark.asyncio
 
@@ -46,6 +49,13 @@ def subprocess_server():
     )
 
     server.start()
+
+    # make sure the server is up
+    for i in range(10):
+        with contextlib.suppress(requests.ConnectionError):
+            requests.get("http://localhost:1234")
+            break
+        time.sleep(0.1)
 
     yield
 
