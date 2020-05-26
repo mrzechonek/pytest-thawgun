@@ -80,6 +80,7 @@ class ThawGun:
                         handle = self.loop._scheduled[0]
 
                         if handle._when > new_time:
+                            current_time = new_time
                             break
 
                         current_time = handle._when
