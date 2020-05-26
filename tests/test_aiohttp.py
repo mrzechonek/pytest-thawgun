@@ -29,7 +29,7 @@ def application():
 async def async_server():
     runner = aiohttp.web.AppRunner(application())
     await runner.setup()
-    site = aiohttp.web.TCPSite(runner, host="localhost", port=8080)
+    site = aiohttp.web.TCPSite(runner, host="localhost", port=1234)
     await site.start()
 
     yield
@@ -42,7 +42,7 @@ def subprocess_server():
     server = multiprocessing.Process(
         target=aiohttp.web.run_app,
         args=[application()],
-        kwargs=dict(host="localhost", port=8080),
+        kwargs=dict(host="localhost", port=1234),
     )
 
     server.start()
@@ -60,7 +60,7 @@ async def get_counters(iterations, timeout=None):
     async with aiohttp.ClientSession(**kwargs) as session:
         for i in range(iterations):
             try:
-                async with session.get("http://localhost:8080/counter") as response:
+                async with session.get("http://localhost:1234/counter") as response:
                     body = await response.text()
                     responses.append(int(body))
             except futures.TimeoutError:
