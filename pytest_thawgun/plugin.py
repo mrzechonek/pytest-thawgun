@@ -27,7 +27,7 @@ class ThawGun:
         return self.real_time() + self.offset
 
     def _datetime(self, current_time):
-        return datetime.fromtimestamp(current_time) + self.wall_offset
+        return datetime.utcfromtimestamp(current_time) + self.wall_offset
 
     async def _drain(self):
         while True:
